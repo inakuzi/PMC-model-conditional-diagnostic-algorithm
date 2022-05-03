@@ -1,0 +1,289 @@
+function [M,T,F]=diagnosticalgorithm()
+ %该算法为一种基于PMC的应用于超立方体的条件诊断算法
+
+ %首先生成自定义维数的超立方体，并产生出对应的节点之间邻接关系矩阵，由于数量过于庞大，只能通过人为的事先定义确定故障节点，生成诊断症候矩阵。
+ %使用者首先输入一个维度
+ dimofcube=input('please define the dimensionality of hypercube(dimensionality must be greater than 1):');
+ if dimofcube<1
+    dimofcube=input('please redefine the dimensionality of hypercube(dimensionality must be greater than 1):');
+    
+ end
+ %根据维度创建节点关系矩阵（节点间直接连接为1，否则为0）
+ if dimofcube==1
+    hypercubeMatrix=[0 1;1 0];
+ else
+    hypercubeMatrix=[0 1;1 0];
+    for i=2:dimofcube
+      hypercubeMatrix=[hypercubeMatrix eye(2^(i-1));eye(2^(i-1)) hypercubeMatrix];
+    end
+ end  
+ %指定故障节点
+global node
+node=[];
+ for j=1:2^dimofcube
+     node(j)=1;
+ end
+ failedNum=input('difine the number of failed node:');
+ if failedNum<1||failedNum>4*(dimofcube-2)+1
+     failedNum=input('redifine the number of failed node(0<number<4*(dimension-2)+1):');
+ end
+ for z=1:failedNum
+     node(input('define the serial number of failed node'))=0;
+ end
+ %定义PMC诊断规则,并根据模型矩阵输出诊断矩阵
+ [r,c]=find(hypercubeMatrix==1);
+ diagnosticMatrix=nan(2^dimofcube,2^dimofcube);
+ for i=1:numel(r)
+     switch node(c(i))
+            case 1
+                 switch node(r(i))
+                        case 1
+                             diagnosticMatrix(r(i),c(i))=0;
+                        case 0
+                             diagnosticMatrix(r(i),c(i))=1;
+                 end
+            case 0
+                 switch node(r(i))
+                        case 1
+                             diagnosticMatrix(r(i),c(i))=randi([0,1]);
+                        case 0
+                             diagnosticMatrix(r(i),c(i))=randi([0,1]);
+                 end   
+     end
+ 
+ end
+ %反馈出生成的两个矩阵，以及故障节点信息
+ failednodeserial=find(node==0);
+ save failednodeserial;
+ save hypercubeMatrix;
+ save diagnosticMatrix;
+ 
+   
+%------------------------------------------------------------------------------------------------------------
+ % T为无故障集合，T={ti∈V|,ti为无故障节点};
+ T=[];
+ % F为故障集合，F={fi为故障节点};
+ F=[];
+ % M为未确定诊断状态的节点集合
+ M=[];
+ % Nu为节点u的相邻节点集合;
+ Nu=[];
+%算法 1  PMC模型下的超立方体条件诊断算法
+%T为无故障集合
+%F为故障集合
+%M1、M2、M3，.....Mi为待确定状态的节点集合；
+%N(u)为节点u的相邻节点集合；
+%σ(u,v)为节点u对节点v的测试结果；
+%输入为n维超立方体(n≥5)，故障节点数N≤4(n-2)+1；
+%输出为诊断出的所有故障节点集合F.
+%(1)初始化，随机选一个未诊断过的节点u作为初始节点。
+%(2)以节点u为初始节点，采用广度优先搜索遍历整个超立方体，遍历过程履行定义1的诊断规则，遍历完成一次后监测立方体中是否还有未遍历节点，如果有则在未遍历节点中随机选择一个作为新的初始节点进行下一次广度优先搜索，直到所有节点都被访问过。
+%(3)形成了一系列的待确定状态集合M1，M2，M3，......，Mi和F. 根据定理3至定理7，可以把所有待确定状态集合分类为故障集合或无故障集合。
+%(4)由此得到F为立方体网络的所有故障节点集合，T为无故障节点集合。
+%算法结束.
+
+ 
+
+ visited=ones(1,2^dimofcube);%标记是否被访问过
+ t2=0;K=1;queue=[];
+
+
+ %对节点进行遍历
+ 
+ while sum(visited)~=0
+       u(1)=randi([1,2^dimofcube]);%初始随机从一个节点开始
+       while visited(u(1))==0
+             u(1)=randi([1,2^dimofcube]);%初始随机从一个节点开始
+       end
+      
+       M(K,1)=u(1);
+       k=2;
+       
+       %队列       
+       head=1;
+       tail=1;
+       queue(head)=u(1);%向队列头中加入第一个随机开始的节点
+       
+       head=head+1;%队列扩展
+       while tail~=head
+             p=queue(tail);%取队尾节点
+             visited(p)=0;
+             for q=1:2^dimofcube
+                 if (hypercubeMatrix(p,q)==1)&&logical(visited(q))
+                    if PMC(p,q)==0
+                        if PMC(q,p)==0
+                            M(K,k)=q;
+                            queue(head)=q;
+                            head=head+1;
+                            visited(q)=0;
+                            k=k+1;                                                        
+                        else
+                            M(K+1,1)=q;
+                           % for e=1:numel(M(K,:))                               
+                           %     F(t2+e)=M(K,e);
+                           % end 
+                                head=2;
+                                queue=[];
+                                queue(1)=q;
+                                tail=0;                               
+                                %t2=t2+e;
+                                K=K+1;
+                                
+                                k=2;
+                                visited(q)=0;                                                                                                                                                  
+                        end
+                    else
+                        % 根据算法，此时不能鉴定，do nothing 
+                        
+                    end    
+                    %queue(head)=q;
+                    %head=head+1;
+                    %Nu=[Nu q];
+                 end
+             end
+             
+             tail=tail+1;
+             
+             
+       end
+       K=K+1;
+ end
+%此时得到若干不确定集合存在M中（M中的每一行都算一个不确定集合，有多少列就有多少个集合。此时F中为已经确定的故障节点，这些节点仍然存在M中）
+%现在，根据原论文中给定的定理3~7去判断这些未确定集合属于故障集合F还是无故障集合T。
+
+%首先，未能出现在集合M中的孤点，根据定理肯定是故障节点，把他们输入到故障集合F中
+%for s=1:2^dimofcube
+%     if ismember(s,M)
+%        %do nothing
+%     else 
+%        F(t2+1)=s;
+%        t2=t2+1;
+%     end
+   
+%end
+%其次，根据集合M的内容，我们能确定一个元素个数大于可诊断度4(n-2)+1的行肯定全为无故障节点
+ [z1,z2]=size(M);
+ t=1;
+ for x1=1:z1
+     if sum(logical(M(x1,:)))>4*(dimofcube-2)+1
+         for x2=1:z2
+             T(t)=M(x1,x2);
+             t=t+1;
+         end
+     end
+ end
+ 
+ %紧接着，根据定理7，在该诊断算法下，n维超立方体（n大于等于5），生成的无故障集合不超过三个，且有两个无故障集合元素个数为2。
+ %如果只有两个无故障集合，那么小的那一个元素个数不超过5。
+ %于是我们把M中元素个数大于1且小于6的行进行分析，
+ %结合定理5、6，无故障集合里所有节点的所有相邻节点必为故障节点，因此，
+ %我们拿这些行的每一个节点去测是否和上一步骤里得到的元素个数大于最大节点故障数（4(n-2)+1）的行里面的所有节点存在相邻（根据邻接矩阵）
+ %如果存在哪怕一个节点相邻则整行元素一定为故障节点，如果完全不相邻，且该行元素个数不是2，那么该行里所有节点为无故障节点，
+ %此时所有无故障节点都已找到，算法完成。否则，如果完全不相邻且元素个数为2，那么该行里两个点为无故障节点，此时仅仅需要寻找另一个
+ %元素个数为2的行，如法炮制即可。此时，所有无故障节点已找到，算法完成。
+ 
+ 
+ 
+ for i=1:z1
+     flag=0;
+     record=[];
+     t1=1;
+     if sum(logical(M(i,:)))>2&&sum(logical(M(i,:)))<6
+        for r=1:sum(logical(M(i,:)))
+            for e=1:2^dimofcube
+                if hypercubeMatrix(M(i,r),e)
+                   record(t1)=e;
+                   t1=t1+1;
+                end
+            end         
+        end
+     end
+     
+ 
+ record=unique(record);
+ %record1=[];
+ record1=intersect(record,T);
+  if sum(record1)==0
+     for i1=1:sum(logical(M(i,:)))
+        T(t)=M(i,i1);
+        t+t+1;
+     end
+     T=sort(T);
+     t2=0;
+     for s=1:2^dimofcube
+         if ~ismember(s,T)
+            F(t2+1)=s;
+            t2=t2+1;       
+         end
+     end
+     F=unique(F);
+     F(F==0)=[];
+     F=sort(F);
+     flag=1;
+     break;
+  end
+  if  flag==1;
+      break;
+  end
+ end
+ if flag~=1
+       for i=1:z1
+           record2=[];
+           t2=1;
+           flag=0;
+           if sum(logical(M(i,:)))==2
+              for r=1:sum(logical(M(i,:)))
+                  for e=1:2^dimofcube
+                      if hypercubeMatrix(M(i,r),e)
+                         record2(t2)=e;
+                         t2=t2+1;
+                      end
+                  end         
+              end
+           end
+           record=unique(record2);
+           %record1=[];
+           record1=intersect(record,T);
+           if sum(record1)==0
+              for i1=1:(logical(M(i,:)))
+                  T(t)=M(i,i1);
+                  t+t+1;
+              end
+              T=sort(T);
+              flag=flag+1;
+           end
+           if  flag==2;
+               break;
+           end
+       end 
+       t2=0;
+       for s=1:2^dimofcube
+           if ~ismember(s,T)
+              F(t2+1)=s;
+              t2=t2+1;       
+           end
+           
+       end
+       F=unique(F);
+       F(F==0)=[];
+       F=sort(F); 
+       
+ end
+end
+ 
+
+ %节点诊断规则函数
+    function logic=PMC(x,y)
+   % copynode=evalin('base','node'); 从工作区复制一份变量到function的语句，先不用,取而代之用global
+   global node
+        switch node(x)
+            case 1
+                if node(y)==1
+                    logic=0;
+                else
+                    logic=1;
+                end
+            case 0
+                 logic=randi([0,1]);         
+        end
+    end
